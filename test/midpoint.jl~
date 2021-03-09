@@ -1,5 +1,0 @@
-
-using Distributed
-
-distributed_ga()
-
