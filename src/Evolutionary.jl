@@ -81,6 +81,9 @@ include("recombinations.jl")
 # ES & GA mutation functions
 include("mutations.jl")
 
+# Constraints' creation
+include("constraints.jl")
+
 # GA selection functions
 include("selections.jl")
 
