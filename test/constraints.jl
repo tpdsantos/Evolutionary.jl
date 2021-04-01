@@ -1,29 +1,31 @@
 
 using Evolutionary
 
+nworks = 2
+
 distributed_ga(localcpu=2)
 
-gene1 = FloatGene([0.5,0.5], [0.5,0.5], ["A1","A2"], m = 5, lb = [0.,0.], ub = [1., 1.])
-gene2 = FloatGene([0.5,0.5], [0.5,0.5], ["B1","B2"], m = 5, lb = [0.,0.], ub = [1., 1.])
-global chrom = AbstractGene[gene1, gene2]
+gene1 = FloatGene([0.5,0.5], [0.2,0.2], ["A1","A2"], m = 20, lb = [0.0,0.0], ub = [1.0, 1.0])
+gene2 = FloatGene([0.2,0.5], [0.2,0.2], ["B1","B2"], m = 20, lb = [0.0,0.0], ub = [1.0, 1.0])
+chrom = AbstractGene[gene1, gene2]
 
-npop = 100
+npop = 10 * nworks
 pop = Vector{Individual}(undef, npop)
-for i in 1:npop
-    pop[i] = copy(chrom)
+for p in 1:npop
+    pop[p] = copy(chrom)
 end
 
-@everywhere Selection(:RWS)
-@everywhere Crossover(:SPX)
+@addconstraints(A1 - B1 > 0, B2 - A2 > 0)
 
-@addconstraints(chrom, A2 >= A1, B1 >= B2)
-
-print("Creating objective function... ")
 @everywhere function objfun(chrom ::Individual)
-    return abs( chrom[1].value[1] - 2.1 )
+    return abs( chrom[1].value[2] - 0.6 )
 end
-println("DONE")
 
-opt = ga(pop, objfun, parallel=true)
+@everywhere Crossover(:SPX)
+@everywhere Selection(:RWS)
 
-nothing
+opt = ga(objfun, pop,
+         nworkers     = nworks ,
+         parallel     = true   ,
+         iterations   = 100    ,
+         mutationRate = 0.8    )

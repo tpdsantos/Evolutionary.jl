@@ -87,6 +87,13 @@ function ga( objfun        ::Function                            ,
     pars[:tol          ] = tol
     pars[:backuptime   ] = isbackup ? backuptime : Inf
 
+    if haskey(constr, :constr)
+        if parallel
+            convert_constr(population[1])
+            @eval @addconstr($parallel)
+        end
+    end
+
     # choose run method depending if it's parallel
     # or serial processing
     if parallel

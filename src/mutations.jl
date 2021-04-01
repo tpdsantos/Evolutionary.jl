@@ -249,13 +249,17 @@ end
 Mutates each entry of `chromossome` according to the mutations chosen.
 """
 function mutate(chromossome ::Individual, rate ::Float64)
-    for gene in chromossome
-        if rand() < rate
+    if rand() < rate
+        for gene in chromossome
             mutate(gene)
+            while !isbound(gene)
+                mutate(gene)
+            end
         end
-        while !isbound(gene)
-            mutate(gene)
+        if isdefined(Main, :mut_with_constr)
+            Main.mut_with_constr(chromossome)
         end
     end
+
     return nothing
 end

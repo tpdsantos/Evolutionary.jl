@@ -1,62 +1,78 @@
 
-export @addconstraints
+export @addconstraints, @addconstr, convert_constr, constr
+
+const constr = Dict{Symbol, Any}()
 
 ####################################################################
 
-function constraints(chrom ::Individual, cmds...)
-    strvec = Vector{AbstractString}(undef, length(cmds))
-    for (i,cmd) in enumerate(cmds)
+macro addconstraints(constraints...)
+    strvec = Vector{String}(undef, length(constraints))
+    for (i,cmd) in enumerate(constraints)
         strvec[i] = string(cmd)
     end
-    for istr in 1:length(strvec)
-        for (igene,gene) in enumerate(chrom)
-            strvec[istr] = convert_constraint(igene, gene, strvec[istr])
-        end
+    str = string("!(",strvec[1],")")
+    for j in strvec[2:end]
+        str *= string(" || !(",j,")")
     end
-    ifclause = string("!(",strvec[1],")")
-    for i in 2:length(strvec)
-        ifclause *= string(" || !(",strvec[i],")")
-    end
-    return Meta.parse(ifclause)
+
+    constr[:constr] = str
+
+    return nothing
 end
 
 ####################################################################
 
-function convert_constraint(igene ::Integer, gene ::FloatGene, constraint ::AbstractString)
-    for (iname,name) in enumerate(gene.name)
-        if occursin(name, constraint)
-            new_name = string("chrom[$igene].value[$iname]")
-            constraint = replace(constraint, name => new_name)
-        end
+function convert_constr(igene ::Integer, gene ::FloatGene)
+    for (i,name) in enumerate(gene.name)
+        str = "chrom[$igene].value[$i]"
+        constr[:constr] = replace(constr[:constr],name=>str)
     end
-    return constraint
+    return nothing
+end
+
+function convert_constr(chrom ::Individual)
+    for (igene, gene) in enumerate(chrom)
+        convert_constr(igene, gene)
+    end
+    return nothing
 end
 
 ####################################################################
 
-macro addconstraints(chrom ::Symbol, cmds...)
-    ex = eval( :( Evolutionary.constraints($chrom, $cmds...) ) )
-    return esc( :(
-        function Evolutionary.mutate(chrom ::Individual, rate ::Float64)
-            for gene in chrom
-                if rand() < rate
-                    mutate(gene)
-                end
-                while !Evolutionary.isbound(gene)
-                    mutate(gene)
-                end
-            end
-            while $(ex)
-                @info("constraint violated, retrying...")
+macro addconstr(parallel ::Bool)
+    constraint = quote end
+    if haskey(constr, :constr)
+        constraint = Meta.parse(constr[:constr])
+    end
+    ex_serial = quote
+        function mut_with_constr(chrom ::Individual)
+            while $(constraint)
+                @info("Constraint violated, retrying...")
                 for gene in chrom
-                    if rand() < rate
+                    mutate(gene)
+                    if !isbound(gene)
                         mutate(gene)
                     end
-                    while !Evolutionary.isbound(gene)
-                        mutate(gene)
-                    end
-                end 
+                end
             end
         end
-    ) )
+    end
+    ex_parallel = quote
+        @everywhere function mut_with_constr(chrom ::Individual)
+            while $(constraint)
+                @info("Constraint violated, retrying...")
+                for gene in chrom
+                    mutate(gene)
+                    if !isbound(gene)
+                        mutate(gene)
+                    end
+                end
+            end
+        end
+    end
+    if parallel
+        return esc(ex_parallel)
+    else
+        return esc(ex_serial)
+    end
 end
